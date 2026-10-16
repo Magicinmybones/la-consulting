@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>LA Consulting</title>
 <meta name="description" content="LA Consulting — legal studio for creatives.">
+<script>
+// Set the first frame before CSS paints. The fallback restores the page if startup fails.
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches) {
+  document.documentElement.classList.add('entrance-prep');
+  window.entranceFallback = setTimeout(() => {
+    document.documentElement.classList.remove('entrance-prep');
+  }, 5000);
+}
+</script>
 <style>
 /* ---------- Local fonts ---------- */
 @font-face{font-family:"Anton";src:url(assets/anton.woff2) format("woff2");font-weight:400;font-display:block}
@@ -96,6 +105,15 @@ a{color:inherit;text-decoration:none}
 }
 .tag span{display:block; letter-spacing:calc(var(--ls, .2) * var(--g)); transform:translateX(calc(var(--dx, 0) * var(--g)))}
 
+/* Only the opening frame uses these states; the original styles return on completion. */
+.entrance-prep .nav,.entrance-prep .plat img,.entrance-prep .tag span{opacity:0}
+.entrance-prep .title b,.entrance-prep .tag span{clip-path:inset(100% 0 0 0)}
+.entrance-prep .plat svg{clip-path:inset(0 100% 0 0)}
+@media (prefers-reduced-motion: reduce){
+  .entrance-prep .nav,.entrance-prep .plat img,.entrance-prep .tag span{opacity:1}
+  .entrance-prep .title b,.entrance-prep .tag span,.entrance-prep .plat svg{clip-path:none}
+}
+
 /* ---------- Portrait / phone: re-flowed, still edge-to-edge, still one screen ---------- */
 @media (max-aspect-ratio: 1/1){
   :root{--m:calc(100vw / 390)}
@@ -163,5 +181,83 @@ a{color:inherit;text-decoration:none}
     </div>
   </div>
 </main>
+<script>
+(() => {
+  const root = document.documentElement;
+  if (!root.classList.contains('entrance-prep')) return;
+
+  const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+  const animations = [];
+  let complete = false;
+  const finish = () => {
+    if (complete) return;
+    complete = true;
+    root.classList.remove('entrance-prep');
+    animations.forEach(animation => animation.cancel());
+    reducedMotion.removeEventListener('change', onPreferenceChange);
+    clearTimeout(window.entranceFallback);
+  };
+  const onPreferenceChange = () => {
+    if (reducedMotion.matches) finish();
+  };
+  reducedMotion.addEventListener('change', onPreferenceChange);
+
+  const play = (element, frames, delay, duration, easing) => {
+    animations.push(element.animate(frames, {
+      delay, duration, easing, fill: 'both'
+    }));
+  };
+
+  const start = () => {
+    if (complete || reducedMotion.matches) return finish();
+
+    play(document.querySelector('.nav'), [
+      {opacity: 0, transform: 'translateY(-6px)'},
+      {opacity: 1, transform: 'none'}
+    ], 100, 490, 'cubic-bezier(.22,1,.36,1)');
+
+    document.querySelectorAll('.title b').forEach((glyph, index) => {
+      const delay = index < 2 ? 100 + index * 70 : 260 + (index - 2) * 42;
+      play(glyph, [
+        {clipPath: 'inset(100% 0 0 0)'},
+        {clipPath: 'inset(0 0 0 0)'}
+      ], delay, 790, 'cubic-bezier(.19,1,.22,1)');
+    });
+
+    play(document.querySelector('.plat img'), [
+      {opacity: 0}, {opacity: 1}
+    ], 620, 830, 'cubic-bezier(.25,.8,.25,1)');
+
+    play(document.querySelector('.plat svg'), [
+      {clipPath: 'inset(0 100% 0 0)'},
+      {clipPath: 'inset(0 0 0 0)'}
+    ], 920, 810, 'cubic-bezier(.22,1,.36,1)');
+
+    document.querySelectorAll('.tag span').forEach((line, index) => {
+      play(line, [
+        {opacity: 0, clipPath: 'inset(100% 0 0 0)'},
+        {opacity: 1, clipPath: 'inset(0 0 0 0)'}
+      ], 1270 + index * 130, 570, 'cubic-bezier(.22,1,.36,1)');
+    });
+
+    Promise.all(animations.map(animation => animation.finished)).then(finish, finish);
+  };
+
+  // Wait briefly for the authored fonts and hero image so the reveal has no font swap.
+  const image = document.querySelector('.plat img');
+  let readinessTimeout;
+  const readiness = Promise.all([
+    document.fonts.ready,
+    image.decode().catch(() => {})
+  ]);
+  Promise.race([
+    readiness,
+    new Promise(resolve => { readinessTimeout = setTimeout(resolve, 1200); })
+  ]).then(() => {
+    clearTimeout(readinessTimeout);
+    try { start(); } catch { finish(); }
+  }, finish);
+})();
+</script>
 </body>
 </html>
